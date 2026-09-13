@@ -1,10 +1,10 @@
-set(LOCAL_LIB_NAME storage)
+set(LOCAL_LIB_NAME dbengine)
 
 add_library(${LOCAL_LIB_NAME}  
-  table.cpp
+  db_engine.cpp
 )
-
-add_library(data::storage-lib-static ALIAS ${LOCAL_LIB_NAME})
+  
+add_library(data::dbengine-lib-static ALIAS ${LOCAL_LIB_NAME})
 
 set_property(TARGET ${LOCAL_LIB_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
 
@@ -15,5 +15,6 @@ target_include_directories(${LOCAL_LIB_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../..>
   )
 
-# target_link_libraries(${LOCAL_LIB_NAME} PUBLIC
-# )
+target_link_libraries(${LOCAL_LIB_NAME} PUBLIC
+  data::storage-lib-static
+)

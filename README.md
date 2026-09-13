@@ -1,44 +1,36 @@
-# ot-bayan
+# ot-joinserver
 
-`ot-bayan` is a C++20 command-line utility for finding duplicate files.
+`ot-joinserver` is a C++20 TCP server built on Boost.Asio coroutines, paired with a small in-memory data layer (tables + a table registry) intended as the storage backend for the server.
 
-It scans one or more directories, filters candidate files, and groups files with identical content using block hashing.
+Currently the server (`joinserver`) runs a line-oriented echo protocol: it accepts newline-terminated strings over TCP and writes each one back to the same connection.
 
 ## Features
 
-- Recursive directory scanning with configurable depth
-- Excluding directories from scan
-- File-name mask filtering (`*` and `?`, case-insensitive)
-- Minimum file size filter
-- Configurable block size for hashing
-- Two hash backends: `crc32` and `md5`
-- Duplicate grouping by content, not by file name
-- Verbose mode with a parameter summary and a per-group file/size table
-- Print paths as full (canonical) by default, or as-passed with `--relative`
+- Coroutine-based async TCP server (`TcpServer`) — one coroutine per client connection, non-blocking accept loop
+- Newline-delimited string protocol: read a line, respond with a line
+- Handles multiple concurrent clients
+- In-memory `Table` storage: thread-safe (reader/writer lock) insert/remove/get/list by integer id
+- `DbEngine`: create/drop/lookup named tables, list all tables
 
 ## Requirements
 
 - CMake 3.20+
 - C++20 compiler (GCC/Clang/MSVC)
-- Boost components:
-	- `filesystem`
-	- `program_options`
-	- `system`
+- Boost (headers; `Boost::boost`)
+- POSIX threads
 - Optional: GoogleTest (for unit tests)
 
 ## Build
-
-### Release/Default build
 
 ```bash
 cmake -S . -B build
 cmake --build build
 ```
 
-The executable will be available at:
+The server executable will be available at:
 
 ```bash
-build/bin/bayan
+build/bin/joinserver
 ```
 
 ### Build with tests enabled
@@ -52,167 +44,62 @@ Note: if `WITH_GOOGLE_TEST` is `OFF` in your existing CMake cache, tests are not
 
 ## Quick Start
 
-### Show help
+### Run the server
 
 ```bash
-./build/bin/bayan --help
+./build/bin/joinserver [port]
 ```
 
-### Show version
+`port` is optional and defaults to `9000`.
+
+### Talk to it with `nc`
 
 ```bash
-./build/bin/bayan --version
+nc 127.0.0.1 9000
 ```
 
-### Find duplicates in a directory
-
-```bash
-./build/bin/bayan --scan test-dir --depth 5 --min-size 1 --relative
-```
-
-Example output:
+Type a line and press Enter — the server echoes it back on the same connection:
 
 ```text
-  test-dir/subdir1/sub-sub-dir/subsub.md
-  test-dir/subdir2/subsub.md
-  test-dir/subdir2/sub2.md
+hello
+hello
+foo bar
+foo bar
 ```
 
-Note: by default paths are printed fully resolved (canonical); pass `--relative` to print them as given on the command line.
-
-## CLI Reference
-
-Current options:
-
-```text
-	-h [ --help ]                   Produce help message
-	-s [ --scan ] arg               Directories to scan
-	-e [ --exclude ] arg            Directories to exclude
-	-d [ --depth ] arg (=0)         Scan depth (0 - current dir only)
-	-m [ --min-size ] arg (=1)      Minimum file size in bytes
-	--mask arg                      Filename masks (case-insensitive)
-	-b [ --block-size ] arg (=4096) Block size bytes for hashing (default: 4096)
-	--hash arg (=crc32)             Hash algorithm (crc32, md5)
-	-r [ --relative ]               Print paths as passed (relative) instead of full paths
-	-V [ --verbose ]                Verbose output: print used parameters and a table with file paths and sizes
-	-v [ --version ]                Show version information
-```
-
-## Usage Examples
-
-### 1) Scan multiple directories
+Non-interactive one-shot test:
 
 ```bash
-./build/bin/bayan \
-	--scan /data/photos /data/backups \
-	--depth 6 \
-	--min-size 1024
+printf 'hello world\nsecond line\n' | nc 127.0.0.1 9000
 ```
 
-### 2) Use masks to restrict file types
-
-```bash
-./build/bin/bayan \
-	--scan /data \
-	--depth 8 \
-	--mask "*.jpg" "*.png" "*.jpeg"
-```
-
-### 3) Exclude known directories
-
-```bash
-./build/bin/bayan \
-	--scan /data \
-	--exclude /data/.git /data/cache \
-	--depth 8
-```
-
-### 4) Switch hash algorithm and block size
-
-```bash
-./build/bin/bayan \
-	--scan /data \
-	--hash md5 \
-	--block-size 8192 \
-	--depth 8
-```
-
-### 5) Verbose output with relative paths
-
-```bash
-./build/bin/bayan \
-	--scan /data \
-	--depth 8 \
-	--relative \
-	--verbose
-```
-
-Verbose mode prints the resolved parameters and, for each duplicate group, a table of file paths and sizes instead of a plain path list.
-
-## How It Works
-
-Duplicate detection pipeline:
-
-```mermaid
-flowchart LR
-	A[CLI args] --> B[CliParser]
-	B --> C[Bayan::extractOptions]
-	C --> D[FileFinder::Find]
-	D --> E[FileObj list]
-	E --> F[DuplicateFinder::Find]
-	F --> G[Group by file size]
-	G --> H[Refine by block hash]
-	H --> I[Duplicate groups]
-	I --> J[Printed paths]
-```
-
-Core idea:
-
-- Files are first grouped by size.
-- Only groups with at least 2 files continue.
-- Those groups are refined block-by-block using hashes.
-- Groups that still match after all blocks are reported as duplicates.
-
-This avoids full byte-by-byte comparisons for most non-duplicates and discards differences early.
+Multiple clients can connect at once; each connection is handled independently.
 
 ## Architecture
 
 Project layout:
 
-- `src/app/bayan`: executable entry point (`main.cpp`)
-- `src/lib/bayan/bayan`: application orchestration (`Bayan`)
-- `src/lib/bayan/cli-parser`: CLI parsing and help
-- `src/lib/bayan/filesystem-helper`: scanning (`FileFinder`) and file abstraction (`FileObj`)
-- `src/lib/bayan/duplicate-finder`: duplicate grouping/refinement logic
-- `src/lib/bayan/hash`: hash algorithms and factory (`crc32`, `md5`)
-- `src/lib/bayan/version`: generated version constants and helpers
-- `tests/units`: hash unit tests
+- `src/app/join-server`: executable entry point (`main.cpp`) — wires `TcpServer` to a per-connection echo handler
+- `src/lib/network/server`: `TcpServer` — Boost.Asio coroutine-based TCP acceptor and session dispatcher
+- `src/lib/data/storage`: `Table`/`Record` — thread-safe in-memory key/value table (`int` id → name)
+- `src/lib/data/db-engine`: `DbEngine` — owns and manages a set of named `Table`s
 
 Key components:
 
-- `Bayan`
-	- Parses options
-	- Validates required inputs
-	- Configures `FileFinder`
-	- Runs `DuplicateFinder`
-	- Prints duplicate groups (plain list, or a table with sizes in verbose mode)
-	- Resolves printed paths as canonical (default) or as-passed (`--relative`)
+- `TcpServer`
+	- Accepts connections on a configured port
+	- Spawns a caller-supplied coroutine (`SessionHandler`) per accepted socket
+	- Runs on a caller-owned `boost::asio::io_context`
 
-- `FileFinder`
-	- Walks scan roots recursively
-	- Applies depth and exclusion checks
-	- Applies mask and min-size filters
-	- Creates `FileObj` entries with chosen hash function
+- `Table`
+	- Stores records keyed by integer id under a `std::shared_mutex`
+	- `insert` / `remove` / `truncate` / `get` / `getAll` / `size`
+	- Exposes raw data and its mutex for callers that need custom locking (e.g. cross-table joins)
 
-- `FileObj`
-	- Stores file metadata
-	- Reads file content block-by-block lazily
-	- Caches computed block hashes
-
-- `DuplicateFinder`
-	- Buckets by file size
-	- Iteratively partitions groups by hash of block `i`
-	- Returns only groups with cardinality > 1
+- `DbEngine`
+	- Creates, drops, and looks up `Table`s by name
+	- Guards its table registry with its own `std::shared_mutex`
+	- `listTables()` returns all registered table names
 
 ## Testing
 
@@ -221,11 +108,6 @@ When built with `-DWITH_GOOGLE_TEST=ON`:
 ```bash
 ctest --test-dir build --output-on-failure
 ```
-
-Current unit tests cover:
-
-- CRC32 determinism and known test vector
-- MD5 determinism and known test vector
 
 ## Packaging
 
@@ -237,7 +119,5 @@ cpack --config build/CPackConfig.cmake
 
 ## Notes
 
-- If no duplicates are found, output is empty.
-- `--scan` is required.
-- `--depth 0` scans only the top-level of each scan directory.
-- Printed paths are fully resolved (canonical) by default; use `--relative` to print them as passed.
+- The echo protocol is line-based: each message must end with `\n`.
+- The server runs single-threaded (`io_context::run()` on the main thread); concurrency comes from coroutines, not OS threads.
