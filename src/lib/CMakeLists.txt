@@ -1,2 +1,2 @@
-# add_subdirectory(bayan)
+add_subdirectory(data)
 add_subdirectory(network)
