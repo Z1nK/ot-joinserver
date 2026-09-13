@@ -1,0 +1,5 @@
+/ot-bayan.code-workspace
+/build
+/test-dir
+.clangd
+/.cache
