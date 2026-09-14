@@ -4,8 +4,9 @@ target_compile_features(db-workflow-example PUBLIC cxx_std_20)
 
 target_sources(db-workflow-example PRIVATE main.cpp)
 
-target_link_libraries(db-workflow-example PRIVATE    
+target_link_libraries(db-workflow-example PRIVATE
     data::dbengine-lib-static
+    data::join-lib-static
 )
 
 if (MSVC)

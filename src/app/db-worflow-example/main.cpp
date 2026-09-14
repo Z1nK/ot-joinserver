@@ -1,4 +1,5 @@
 #include <data/db-engine/db_engine.hpp>
+#include <data/join/join.hpp>
 
 #include <algorithm>
 #include <iomanip>
@@ -23,69 +24,13 @@ void printTable(const Table& table, std::string_view title) {
   std::cout << '\n';
 }
 
-void printInnerJoin(const Table& left, const Table& right) {
-  std::cout << "INNER JOIN A x B ON A.id = B.id\n";
+void printJoinRows(std::string_view title, const std::vector<JoinedRecord>& rows) {
+  std::cout << title << '\n';
   std::cout << "id | name_a     | name_b\n";
   std::cout << "---+------------+----------\n";
-  for (const auto& recordA : sortedRecords(left)) {
-    if (auto recordB = right.get(recordA.id)) {
-      std::cout << std::right << std::setw(2) << recordA.id << " | " << std::left << std::setw(10) << recordA.name
-                << " | " << recordB->name << '\n';
-    }
-  }
-  std::cout << '\n';
-}
-
-void printLeftJoin(const Table& left, const Table& right) {
-  std::cout << "LEFT JOIN A x B ON A.id = B.id\n";
-  std::cout << "id | name_a     | name_b\n";
-  std::cout << "---+------------+----------\n";
-  for (const auto& recordA : sortedRecords(left)) {
-    if (auto recordB = right.get(recordA.id)) {
-      std::cout << std::right << std::setw(2) << recordA.id << " | " << std::left << std::setw(10) << recordA.name
-                << " | " << recordB->name << '\n';
-    } else {
-      std::cout << std::right << std::setw(2) << recordA.id << " | " << std::left << std::setw(10) << recordA.name
-                << " | " << "NULL" << '\n';
-    }
-  }
-  std::cout << '\n';
-}
-
-void printRightJoin(const Table& left, const Table& right) {
-  std::cout << "RIGHT JOIN A x B ON A.id = B.id\n";
-  std::cout << "id | name_a     | name_b\n";
-  std::cout << "---+------------+----------\n";
-  for (const auto& recordB : sortedRecords(right)) {
-    if (auto recordA = left.get(recordB.id)) {
-      std::cout << std::right << std::setw(2) << recordB.id << " | " << std::left << std::setw(10) << recordA->name
-                << " | " << recordB.name << '\n';
-    } else {
-      std::cout << std::right << std::setw(2) << recordB.id << " | " << std::left << std::setw(10) << "NULL"
-                << " | " << recordB.name << '\n';
-    }
-  }
-  std::cout << '\n';
-}
-
-void printFullJoin(const Table& left, const Table& right) {
-  std::cout << "FULL JOIN A x B ON A.id = B.id\n";
-  std::cout << "id | name_a     | name_b\n";
-  std::cout << "---+------------+----------\n";
-  for (const auto& recordA : sortedRecords(left)) {
-    if (auto recordB = right.get(recordA.id)) {
-      std::cout << std::right << std::setw(2) << recordA.id << " | " << std::left << std::setw(10) << recordA.name
-                << " | " << recordB->name << '\n';
-    } else {
-      std::cout << std::right << std::setw(2) << recordA.id << " | " << std::left << std::setw(10) << recordA.name
-                << " | " << "NULL" << '\n';
-    }
-  }
-  for (const auto& recordB : sortedRecords(right)) {
-    if (!left.get(recordB.id)) {
-      std::cout << std::right << std::setw(2) << recordB.id << " | " << std::left << std::setw(10) << "NULL"
-                << " | " << recordB.name << '\n';
-    }
+  for (const auto& row : rows) {
+    std::cout << std::right << std::setw(2) << row.id << " | " << std::left << std::setw(10)
+              << row.name_a.value_or("NULL") << " | " << row.name_b.value_or("NULL") << '\n';
   }
   std::cout << '\n';
 }
@@ -124,10 +69,10 @@ int main() {
   printTable(*tableA, "Table A");
   printTable(*tableB, "Table B");
 
-  printInnerJoin(*tableA, *tableB);
-  printLeftJoin(*tableA, *tableB);
-  printRightJoin(*tableA, *tableB);
-  printFullJoin(*tableA, *tableB);
+  printJoinRows("INNER JOIN A x B ON A.id = B.id", innerJoin(*tableA, *tableB));
+  printJoinRows("LEFT JOIN A x B ON A.id = B.id", leftJoin(*tableA, *tableB));
+  printJoinRows("RIGHT JOIN A x B ON A.id = B.id", rightJoin(*tableA, *tableB));
+  printJoinRows("FULL JOIN A x B ON A.id = B.id", fullJoin(*tableA, *tableB));
   
   return 0;
 }
