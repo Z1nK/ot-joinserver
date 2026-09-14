@@ -68,6 +68,28 @@ void printRightJoin(const Table& left, const Table& right) {
   std::cout << '\n';
 }
 
+void printFullJoin(const Table& left, const Table& right) {
+  std::cout << "FULL JOIN A x B ON A.id = B.id\n";
+  std::cout << "id | name_a     | name_b\n";
+  std::cout << "---+------------+----------\n";
+  for (const auto& recordA : sortedRecords(left)) {
+    if (auto recordB = right.get(recordA.id)) {
+      std::cout << std::right << std::setw(2) << recordA.id << " | " << std::left << std::setw(10) << recordA.name
+                << " | " << recordB->name << '\n';
+    } else {
+      std::cout << std::right << std::setw(2) << recordA.id << " | " << std::left << std::setw(10) << recordA.name
+                << " | " << "NULL" << '\n';
+    }
+  }
+  for (const auto& recordB : sortedRecords(right)) {
+    if (!left.get(recordB.id)) {
+      std::cout << std::right << std::setw(2) << recordB.id << " | " << std::left << std::setw(10) << "NULL"
+                << " | " << recordB.name << '\n';
+    }
+  }
+  std::cout << '\n';
+}
+
 }  // namespace
 
 int main() {
@@ -105,5 +127,7 @@ int main() {
   printInnerJoin(*tableA, *tableB);
   printLeftJoin(*tableA, *tableB);
   printRightJoin(*tableA, *tableB);
+  printFullJoin(*tableA, *tableB);
+  
   return 0;
 }
