@@ -1,4 +1,4 @@
-/ot-bayan.code-workspace
+*.code-workspace
 /build
 /test-dir
 .clangd

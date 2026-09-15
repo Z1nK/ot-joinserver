@@ -1,4 +1,4 @@
-name: 'C++ CI ot-bayan'
+name: 'C++ CI ot-joinserver'
 
 on:
   push:

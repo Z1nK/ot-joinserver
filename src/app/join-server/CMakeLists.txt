@@ -6,6 +6,7 @@ target_sources(joinserver PRIVATE main.cpp)
 
 target_link_libraries(joinserver PRIVATE
     network::server-lib-static
+    network::command-handler-lib-static
 )
 
 if (MSVC)
