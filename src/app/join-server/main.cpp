@@ -1,3 +1,6 @@
+#include <network/command-handler/command_handler.hpp>
+#include <network/protocol/parser.hpp>
+#include <network/protocol/response.hpp>
 #include <network/server/server.hpp>
 
 #include <boost/asio.hpp>
@@ -11,7 +14,7 @@ using boost::asio::ip::tcp;
 
 namespace {
 
-awaitable<void> handleSession(tcp::socket socket) {
+awaitable<void> handleSession(tcp::socket socket, CommandHandler& handler) {
   boost::asio::streambuf buffer;
   try {
     for (;;) {
@@ -20,9 +23,11 @@ awaitable<void> handleSession(tcp::socket socket) {
       std::istream is(&buffer);
       std::string line;
       std::getline(is, line);
-      line.push_back('\n');
 
-      co_await boost::asio::async_write(socket, boost::asio::buffer(line), use_awaitable);
+      ParseResult result = parseCommand(line);
+      std::string response = result.command ? handler.handle(*result.command) : formatError(result.error);
+
+      co_await boost::asio::async_write(socket, boost::asio::buffer(response), use_awaitable);
     }
   } catch (const boost::system::system_error& e) {
     if (e.code() != boost::asio::error::eof) {
@@ -45,8 +50,15 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  DbEngine engine;
+  CommandHandler handler(engine);
+
+  engine.createTable("A");
+  engine.createTable("B");
+
   boost::asio::io_context io;
-  TcpServer server(io, {.port = port, .on_session = [](tcp::socket socket) { return handleSession(std::move(socket)); }});
+  TcpServer server(io, {.port = port,
+                         .on_session = [&handler](tcp::socket socket) { return handleSession(std::move(socket), handler); }});
   server.run();
   io.run();
 

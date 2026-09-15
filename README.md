@@ -1,44 +1,35 @@
-# ot-bayan
+# ot-joinserver
 
-`ot-bayan` is a C++20 command-line utility for finding duplicate files.
-
-It scans one or more directories, filters candidate files, and groups files with identical content using block hashing.
+`ot-joinserver` is a C++20 TCP server built on Boost.Asio coroutines, backed by a small in-memory data layer (tables + a table registry). It exposes that data layer over a line-oriented text protocol for creating tables, inserting rows, and running joins/set operations between two fixed tables, `A` and `B`.
 
 ## Features
 
-- Recursive directory scanning with configurable depth
-- Excluding directories from scan
-- File-name mask filtering (`*` and `?`, case-insensitive)
-- Minimum file size filter
-- Configurable block size for hashing
-- Two hash backends: `crc32` and `md5`
-- Duplicate grouping by content, not by file name
-- Verbose mode with a parameter summary and a per-group file/size table
-- Print paths as full (canonical) by default, or as-passed with `--relative`
+- Coroutine-based async TCP server (`TcpServer`) — one coroutine per client connection, non-blocking accept loop
+- Newline-delimited command protocol: read a line, respond with a (possibly multi-line) result
+- Handles multiple concurrent clients
+- In-memory `Table` storage: thread-safe (reader/writer lock) insert/remove/get/list by integer id
+- `DbEngine`: create/drop/lookup named tables, list all tables
+- `INNER`/`LEFT`/`RIGHT`/`FULL` joins and symmetric difference between two tables, keyed by integer id
 
 ## Requirements
 
 - CMake 3.20+
 - C++20 compiler (GCC/Clang/MSVC)
-- Boost components:
-	- `filesystem`
-	- `program_options`
-	- `system`
+- Boost (headers; `Boost::boost`)
+- POSIX threads
 - Optional: GoogleTest (for unit tests)
 
 ## Build
-
-### Release/Default build
 
 ```bash
 cmake -S . -B build
 cmake --build build
 ```
 
-The executable will be available at:
+The server executable will be available at:
 
 ```bash
-build/bin/bayan
+build/bin/joinserver
 ```
 
 ### Build with tests enabled
@@ -52,167 +43,143 @@ Note: if `WITH_GOOGLE_TEST` is `OFF` in your existing CMake cache, tests are not
 
 ## Quick Start
 
-### Show help
+### Run the server
 
 ```bash
-./build/bin/bayan --help
+./build/bin/joinserver [port]
 ```
 
-### Show version
+`port` is optional and defaults to `9000`.
+
+### Talk to it with `nc`
 
 ```bash
-./build/bin/bayan --version
+nc 127.0.0.1 9000
 ```
 
-### Find duplicates in a directory
-
-```bash
-./build/bin/bayan --scan test-dir --depth 5 --min-size 1 --relative
-```
-
-Example output:
+Then type commands, one per line. Tables must be created before they're used, and the join/set commands always operate on tables named `A` and `B`:
 
 ```text
-  test-dir/subdir1/sub-sub-dir/subsub.md
-  test-dir/subdir2/subsub.md
-  test-dir/subdir2/sub2.md
+CREATE_TABLE A
+OK
+
+CREATE_TABLE B
+OK
+
+INSERT A 0 lean
+OK
+
+INSERT A 1 sweater
+OK
+
+INSERT B 0 harry
+OK
+
+PRINT_TABLE A
+0,lean
+1,sweater
+OK
+
+LEFT_JOIN
+0,lean,harry
+1,sweater,NULL
+OK
+
+INTERSECTION
+0,lean,harry
+OK
+
+TRUNCATE A
+OK
 ```
 
-Note: by default paths are printed fully resolved (canonical); pass `--relative` to print them as given on the command line.
-
-## CLI Reference
-
-Current options:
-
-```text
-	-h [ --help ]                   Produce help message
-	-s [ --scan ] arg               Directories to scan
-	-e [ --exclude ] arg            Directories to exclude
-	-d [ --depth ] arg (=0)         Scan depth (0 - current dir only)
-	-m [ --min-size ] arg (=1)      Minimum file size in bytes
-	--mask arg                      Filename masks (case-insensitive)
-	-b [ --block-size ] arg (=4096) Block size bytes for hashing (default: 4096)
-	--hash arg (=crc32)             Hash algorithm (crc32, md5)
-	-r [ --relative ]               Print paths as passed (relative) instead of full paths
-	-V [ --verbose ]                Verbose output: print used parameters and a table with file paths and sizes
-	-v [ --version ]                Show version information
-```
-
-## Usage Examples
-
-### 1) Scan multiple directories
+Non-interactive one-shot test with `printf`:
 
 ```bash
-./build/bin/bayan \
-	--scan /data/photos /data/backups \
-	--depth 6 \
-	--min-size 1024
+printf 'CREATE_TABLE A\nCREATE_TABLE B\nINSERT A 0 lean\nINSERT B 0 harry\nPRINT_TABLE A\nLEFT_JOIN\nFULL_JOIN\nSYMMETRIC_DIFFERENCE\n' | nc 127.0.0.1 9000
 ```
 
-### 2) Use masks to restrict file types
+An unrecognized command or bad arguments returns an error on the same connection, without dropping it:
 
 ```bash
-./build/bin/bayan \
-	--scan /data \
-	--depth 8 \
-	--mask "*.jpg" "*.png" "*.jpeg"
+printf 'NOT_A_COMMAND\n' | nc 127.0.0.1 9000
+# ERR unknown command: NOT_A_COMMAND
 ```
 
-### 3) Exclude known directories
+A join/set command run before both `A` and `B` exist, or `PRINT_TABLE`/`INSERT`/`TRUNCATE` against a table that hasn't been created, also errors instead of returning rows:
 
 ```bash
-./build/bin/bayan \
-	--scan /data \
-	--exclude /data/.git /data/cache \
-	--depth 8
+printf 'PRINT_TABLE C\n' | nc 127.0.0.1 9000
+# ERR no such table: C
 ```
 
-### 4) Switch hash algorithm and block size
+Multiple clients can connect at once; each connection is handled independently, and all share the same underlying tables.
 
-```bash
-./build/bin/bayan \
-	--scan /data \
-	--hash md5 \
-	--block-size 8192 \
-	--depth 8
-```
+## Protocol
 
-### 5) Verbose output with relative paths
+One command per line, space-separated tokens.
 
-```bash
-./build/bin/bayan \
-	--scan /data \
-	--depth 8 \
-	--relative \
-	--verbose
-```
+| Command | Arguments | Effect |
+| --- | --- | --- |
+| `CREATE_TABLE` | `table` | Create a new empty table named `table` |
+| `INSERT` | `table id name` | Insert row `(id, name)` into `table`; `id` is an integer |
+| `TRUNCATE` | `table` | Remove all rows from `table` |
+| `PRINT_TABLE` | `table` | List all rows of `table`, sorted by `id` |
+| `INTERSECTION` | — | Inner join of `A` and `B` on `id` |
+| `SYMMETRIC_DIFFERENCE` | — | Rows whose `id` exists in exactly one of `A`/`B` |
+| `LEFT_JOIN` | — | Left join of `A` and `B` on `id` |
+| `RIGHT_JOIN` | — | Right join of `A` and `B` on `id` |
+| `FULL_JOIN` | — | Full outer join of `A` and `B` on `id` |
 
-Verbose mode prints the resolved parameters and, for each duplicate group, a table of file paths and sizes instead of a plain path list.
+`CREATE_TABLE`/`INSERT`/`TRUNCATE`/`PRINT_TABLE` accept any table name; the five join/set commands always operate on the tables named `A` and `B` specifically, so those two must be created (and populated) first.
 
-## How It Works
+### Responses
 
-Duplicate detection pipeline:
+Every response ends with a blank line, so a client can tell where it ends even when it spans multiple lines, and every successful response ends with an `OK` line right before that blank line — including `PRINT_TABLE`/join/set responses, after any result rows:
 
-```mermaid
-flowchart LR
-	A[CLI args] --> B[CliParser]
-	B --> C[Bayan::extractOptions]
-	C --> D[FileFinder::Find]
-	D --> E[FileObj list]
-	E --> F[DuplicateFinder::Find]
-	F --> G[Group by file size]
-	G --> H[Refine by block hash]
-	H --> I[Duplicate groups]
-	I --> J[Printed paths]
-```
-
-Core idea:
-
-- Files are first grouped by size.
-- Only groups with at least 2 files continue.
-- Those groups are refined block-by-block using hashes.
-- Groups that still match after all blocks are reported as duplicates.
-
-This avoids full byte-by-byte comparisons for most non-duplicates and discards differences early.
+- `OK` alone — a mutation (`CREATE_TABLE`/`INSERT`/`TRUNCATE`) succeeded with no rows to report.
+- `ERR <message>` — the command failed: unknown command, wrong number of arguments, non-integer id, missing table, duplicate id, or a join/set command run before both `A` and `B` exist. No trailing `OK` in this case.
+- `PRINT_TABLE`: zero or more `id,name` lines (sorted by `id`), then `OK`.
+- A join/set command: zero or more `id,name_a,name_b` lines, one per result row, where a missing side is rendered as `NULL`, then `OK`.
 
 ## Architecture
 
 Project layout:
 
-- `src/app/bayan`: executable entry point (`main.cpp`)
-- `src/lib/bayan/bayan`: application orchestration (`Bayan`)
-- `src/lib/bayan/cli-parser`: CLI parsing and help
-- `src/lib/bayan/filesystem-helper`: scanning (`FileFinder`) and file abstraction (`FileObj`)
-- `src/lib/bayan/duplicate-finder`: duplicate grouping/refinement logic
-- `src/lib/bayan/hash`: hash algorithms and factory (`crc32`, `md5`)
-- `src/lib/bayan/version`: generated version constants and helpers
-- `tests/units`: hash unit tests
+- `src/app/join-server`: executable entry point (`main.cpp`) — owns the `DbEngine`, wires `TcpServer` to a per-connection handler that parses and dispatches commands
+- `src/lib/network/server`: `TcpServer` — Boost.Asio coroutine-based TCP acceptor and session dispatcher (protocol-agnostic)
+- `src/lib/network/protocol`: wire format only — `Command` variant, `parseCommand()`, and `formatOk`/`formatError`/`formatRows` (overloaded for table rows and join rows) response builders; no `DbEngine` dependency
+- `src/lib/network/command-handler`: `CommandHandler` — executes a parsed `Command` against a `DbEngine`/the join functions and returns a formatted response
+- `src/lib/data/storage`: `Table`/`Record` — thread-safe in-memory key/value table (`int` id → name)
+- `src/lib/data/db-engine`: `DbEngine` — owns and manages a set of named `Table`s
+- `src/lib/data/join`: free functions implementing `innerJoin`/`leftJoin`/`rightJoin`/`fullJoin`/`symmetricDifference` over two `Table`s
 
 Key components:
 
-- `Bayan`
-	- Parses options
-	- Validates required inputs
-	- Configures `FileFinder`
-	- Runs `DuplicateFinder`
-	- Prints duplicate groups (plain list, or a table with sizes in verbose mode)
-	- Resolves printed paths as canonical (default) or as-passed (`--relative`)
+- `TcpServer`
+	- Accepts connections on a configured port
+	- Spawns a caller-supplied coroutine (`SessionHandler`) per accepted socket
+	- Runs on a caller-owned `boost::asio::io_context`
 
-- `FileFinder`
-	- Walks scan roots recursively
-	- Applies depth and exclusion checks
-	- Applies mask and min-size filters
-	- Creates `FileObj` entries with chosen hash function
+- `parseCommand` / `Command`
+	- Tokenizes a line and validates it against the command's expected arity/types
+	- Produces a closed `std::variant` of command structs, or a `ParseResult` with an error message
 
-- `FileObj`
-	- Stores file metadata
-	- Reads file content block-by-block lazily
-	- Caches computed block hashes
+- `CommandHandler`
+	- One `operator()` overload per `Command` alternative, dispatched via `std::visit` (compiler-enforced exhaustive)
+	- Looks up tables through `DbEngine`, calls into `Table`/the join functions, and formats the result
 
-- `DuplicateFinder`
-	- Buckets by file size
-	- Iteratively partitions groups by hash of block `i`
-	- Returns only groups with cardinality > 1
+- `Table`
+	- Stores records keyed by integer id under a `std::shared_mutex`
+	- `insert` / `remove` / `truncate` / `get` / `getAll` / `size`
+	- Exposes raw data and its mutex for callers that need custom locking (e.g. cross-table joins)
+
+- `DbEngine`
+	- Creates, drops, and looks up `Table`s by name
+	- Guards its table registry with its own `std::shared_mutex`
+	- `listTables()` returns all registered table names
+
+Adding a new command means adding one struct to the `Command` variant, one arm in `parseCommand`, and one `CommandHandler::operator()` overload — the compiler flags any variant alternative left unhandled.
 
 ## Testing
 
@@ -222,10 +189,8 @@ When built with `-DWITH_GOOGLE_TEST=ON`:
 ctest --test-dir build --output-on-failure
 ```
 
-Current unit tests cover:
-
-- CRC32 determinism and known test vector
-- MD5 determinism and known test vector
+- `protocol_tests`: `parseCommand` arity/type validation and response formatting, in isolation from `DbEngine`
+- `command_handler_tests`: each command executed against a real `DbEngine`, including error paths (missing table, duplicate id, joins before both tables exist)
 
 ## Packaging
 
@@ -237,7 +202,5 @@ cpack --config build/CPackConfig.cmake
 
 ## Notes
 
-- If no duplicates are found, output is empty.
-- `--scan` is required.
-- `--depth 0` scans only the top-level of each scan directory.
-- Printed paths are fully resolved (canonical) by default; use `--relative` to print them as passed.
+- The protocol is line-based: each command must end with `\n`, and every response ends with a blank line.
+- The server runs single-threaded (`io_context::run()` on the main thread); concurrency comes from coroutines, not OS threads. `DbEngine`/`Table` still guard themselves with `std::shared_mutex` for when that changes.
