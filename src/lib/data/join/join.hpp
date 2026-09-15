@@ -16,3 +16,4 @@ std::vector<JoinedRecord> innerJoin(const Table& left, const Table& right);
 std::vector<JoinedRecord> leftJoin(const Table& left, const Table& right);
 std::vector<JoinedRecord> rightJoin(const Table& left, const Table& right);
 std::vector<JoinedRecord> fullJoin(const Table& left, const Table& right);
+std::vector<JoinedRecord> symmetricDifference(const Table& left, const Table& right);

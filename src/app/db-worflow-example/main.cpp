@@ -73,6 +73,6 @@ int main() {
   printJoinRows("LEFT JOIN A x B ON A.id = B.id", leftJoin(*tableA, *tableB));
   printJoinRows("RIGHT JOIN A x B ON A.id = B.id", rightJoin(*tableA, *tableB));
   printJoinRows("FULL JOIN A x B ON A.id = B.id", fullJoin(*tableA, *tableB));
-  
+  printJoinRows("SYMMETRIC DIFFERENCE JOIN A x B ON A.id = B.id", symmetricDifference(*tableA, *tableB));
   return 0;
 }
