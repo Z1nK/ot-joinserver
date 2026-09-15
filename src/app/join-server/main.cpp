@@ -53,6 +53,9 @@ int main(int argc, char* argv[]) {
   DbEngine engine;
   CommandHandler handler(engine);
 
+  engine.createTable("A");
+  engine.createTable("B");
+
   boost::asio::io_context io;
   TcpServer server(io, {.port = port,
                          .on_session = [&handler](tcp::socket socket) { return handleSession(std::move(socket), handler); }});

@@ -85,7 +85,7 @@ TEST(FormatResponse, FormatsEmptyJoinRows) { EXPECT_EQ(formatRows(std::vector<Jo
 
 TEST(FormatResponse, FormatsJoinRowsWithNulls) {
   std::vector<JoinedRecord> rows = {{1, std::optional<std::string>("a"), std::nullopt}};
-  EXPECT_EQ(formatRows(rows), "1,a,NULL\nOK\n\n");
+  EXPECT_EQ(formatRows(rows), "1,a,\nOK\n\n");
 }
 
 TEST(FormatResponse, FormatsEmptyTableRows) { EXPECT_EQ(formatRows(std::vector<Record>{}), "OK\n\n"); }

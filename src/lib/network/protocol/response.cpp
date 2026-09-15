@@ -9,9 +9,9 @@ std::string formatRows(const std::vector<JoinedRecord>& rows) {
   for (const auto& row : rows) {
     response += std::to_string(row.id);
     response += ',';
-    response += row.name_a.value_or("NULL");
+    response += row.name_a.value_or("");
     response += ',';
-    response += row.name_b.value_or("NULL");
+    response += row.name_b.value_or("");
     response += '\n';
   }
   response += "OK\n\n";

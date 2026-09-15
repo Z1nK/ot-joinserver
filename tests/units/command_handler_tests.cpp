@@ -59,7 +59,7 @@ TEST_F(CommandHandlerTest, SymmetricDifferenceExcludesMatchingIds) {
   handler.handle(InsertCommand{"A", 2, "sweater"});
   handler.handle(InsertCommand{"B", 2, "harry"});
   handler.handle(InsertCommand{"B", 3, "frank"});
-  EXPECT_EQ(handler.handle(SymmetricDifferenceCommand{}), "1,lean,NULL\n3,NULL,frank\nOK\n\n");
+  EXPECT_EQ(handler.handle(SymmetricDifferenceCommand{}), "1,lean,\n3,,frank\nOK\n\n");
 }
 
 TEST_F(CommandHandlerTest, FullJoinIncludesUnmatchedFromBothSides) {
@@ -67,14 +67,14 @@ TEST_F(CommandHandlerTest, FullJoinIncludesUnmatchedFromBothSides) {
   handler.handle(CreateTableCommand{"B"});
   handler.handle(InsertCommand{"A", 1, "lean"});
   handler.handle(InsertCommand{"B", 2, "harry"});
-  EXPECT_EQ(handler.handle(FullJoinCommand{}), "1,lean,NULL\n2,NULL,harry\nOK\n\n");
+  EXPECT_EQ(handler.handle(FullJoinCommand{}), "1,lean,\n2,,harry\nOK\n\n");
 }
 
 TEST_F(CommandHandlerTest, RightJoinKeepsAllOfB) {
   handler.handle(CreateTableCommand{"A"});
   handler.handle(CreateTableCommand{"B"});
   handler.handle(InsertCommand{"B", 1, "harry"});
-  EXPECT_EQ(handler.handle(RightJoinCommand{}), "1,NULL,harry\nOK\n\n");
+  EXPECT_EQ(handler.handle(RightJoinCommand{}), "1,,harry\nOK\n\n");
 }
 
 TEST_F(CommandHandlerTest, PrintTableRequiresExistingTable) {
