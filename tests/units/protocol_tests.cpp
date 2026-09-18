@@ -77,20 +77,20 @@ TEST(ParseCommand, RejectsEmptyLine) {
   EXPECT_FALSE(result.command.has_value());
 }
 
-TEST(FormatResponse, FormatsOk) { EXPECT_EQ(formatOk(), "OK\n\n"); }
+TEST(FormatResponse, FormatsOk) { EXPECT_EQ(formatOk(), "OK\n"); }
 
-TEST(FormatResponse, FormatsError) { EXPECT_EQ(formatError("bad thing"), "ERR bad thing\n\n"); }
+TEST(FormatResponse, FormatsError) { EXPECT_EQ(formatError("bad thing"), "ERR bad thing\n"); }
 
-TEST(FormatResponse, FormatsEmptyJoinRows) { EXPECT_EQ(formatRows(std::vector<JoinedRecord>{}), "OK\n\n"); }
+TEST(FormatResponse, FormatsEmptyJoinRows) { EXPECT_EQ(formatRows(std::vector<JoinedRecord>{}), "OK\n"); }
 
 TEST(FormatResponse, FormatsJoinRowsWithNulls) {
   std::vector<JoinedRecord> rows = {{1, std::optional<std::string>("a"), std::nullopt}};
-  EXPECT_EQ(formatRows(rows), "1,a,\nOK\n\n");
+  EXPECT_EQ(formatRows(rows), "1,a,\nOK\n");
 }
 
-TEST(FormatResponse, FormatsEmptyTableRows) { EXPECT_EQ(formatRows(std::vector<Record>{}), "OK\n\n"); }
+TEST(FormatResponse, FormatsEmptyTableRows) { EXPECT_EQ(formatRows(std::vector<Record>{}), "OK\n"); }
 
 TEST(FormatResponse, FormatsTableRows) {
   std::vector<Record> rows = {{1, "lean"}, {2, "sweater"}};
-  EXPECT_EQ(formatRows(rows), "1,lean\n2,sweater\nOK\n\n");
+  EXPECT_EQ(formatRows(rows), "1,lean\n2,sweater\nOK\n");
 }
