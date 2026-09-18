@@ -13,14 +13,14 @@ protected:
 }  // namespace
 
 TEST_F(CommandHandlerTest, CreateTableSucceedsOnce) {
-  EXPECT_EQ(handler.handle(CreateTableCommand{"A"}), "OK\n\n");
+  EXPECT_EQ(handler.handle(CreateTableCommand{"A"}), "OK\n");
   EXPECT_EQ(handler.handle(CreateTableCommand{"A"}).substr(0, 3), "ERR");
 }
 
 TEST_F(CommandHandlerTest, InsertRequiresExistingTable) {
   EXPECT_EQ(handler.handle(InsertCommand{"A", 1, "lean"}).substr(0, 3), "ERR");
   handler.handle(CreateTableCommand{"A"});
-  EXPECT_EQ(handler.handle(InsertCommand{"A", 1, "lean"}), "OK\n\n");
+  EXPECT_EQ(handler.handle(InsertCommand{"A", 1, "lean"}), "OK\n");
 }
 
 TEST_F(CommandHandlerTest, InsertRejectsDuplicateId) {
@@ -32,8 +32,8 @@ TEST_F(CommandHandlerTest, InsertRejectsDuplicateId) {
 TEST_F(CommandHandlerTest, TruncateClearsTable) {
   handler.handle(CreateTableCommand{"A"});
   handler.handle(InsertCommand{"A", 1, "lean"});
-  EXPECT_EQ(handler.handle(TruncateCommand{"A"}), "OK\n\n");
-  EXPECT_EQ(handler.handle(InsertCommand{"A", 1, "lean"}), "OK\n\n");
+  EXPECT_EQ(handler.handle(TruncateCommand{"A"}), "OK\n");
+  EXPECT_EQ(handler.handle(InsertCommand{"A", 1, "lean"}), "OK\n");
 }
 
 TEST_F(CommandHandlerTest, JoinRequiresBothTables) {
@@ -41,7 +41,7 @@ TEST_F(CommandHandlerTest, JoinRequiresBothTables) {
   handler.handle(CreateTableCommand{"A"});
   EXPECT_EQ(handler.handle(LeftJoinCommand{}).substr(0, 3), "ERR");
   handler.handle(CreateTableCommand{"B"});
-  EXPECT_EQ(handler.handle(LeftJoinCommand{}), "OK\n\n");
+  EXPECT_EQ(handler.handle(LeftJoinCommand{}), "OK\n");
 }
 
 TEST_F(CommandHandlerTest, IntersectionMapsToInnerJoin) {
@@ -49,7 +49,7 @@ TEST_F(CommandHandlerTest, IntersectionMapsToInnerJoin) {
   handler.handle(CreateTableCommand{"B"});
   handler.handle(InsertCommand{"A", 1, "lean"});
   handler.handle(InsertCommand{"B", 1, "harry"});
-  EXPECT_EQ(handler.handle(IntersectionCommand{}), "1,lean,harry\nOK\n\n");
+  EXPECT_EQ(handler.handle(IntersectionCommand{}), "1,lean,harry\nOK\n");
 }
 
 TEST_F(CommandHandlerTest, SymmetricDifferenceExcludesMatchingIds) {
@@ -59,7 +59,17 @@ TEST_F(CommandHandlerTest, SymmetricDifferenceExcludesMatchingIds) {
   handler.handle(InsertCommand{"A", 2, "sweater"});
   handler.handle(InsertCommand{"B", 2, "harry"});
   handler.handle(InsertCommand{"B", 3, "frank"});
-  EXPECT_EQ(handler.handle(SymmetricDifferenceCommand{}), "1,lean,\n3,,frank\nOK\n\n");
+  EXPECT_EQ(handler.handle(SymmetricDifferenceCommand{}), "1,lean,\n3,,frank\nOK\n");
+}
+
+TEST_F(CommandHandlerTest, SymmetricDifferenceSortsResultsById) {
+  handler.handle(CreateTableCommand{"A"});
+  handler.handle(CreateTableCommand{"B"});
+  handler.handle(InsertCommand{"A", 0, "HELLO"});
+  handler.handle(InsertCommand{"B", 1, "hop"});
+  handler.handle(InsertCommand{"B", 2, "POP"});
+  handler.handle(InsertCommand{"A", 5, "LOLIPOP"});
+  EXPECT_EQ(handler.handle(SymmetricDifferenceCommand{}), "0,HELLO,\n1,,hop\n2,,POP\n5,LOLIPOP,\nOK\n");
 }
 
 TEST_F(CommandHandlerTest, FullJoinIncludesUnmatchedFromBothSides) {
@@ -67,14 +77,14 @@ TEST_F(CommandHandlerTest, FullJoinIncludesUnmatchedFromBothSides) {
   handler.handle(CreateTableCommand{"B"});
   handler.handle(InsertCommand{"A", 1, "lean"});
   handler.handle(InsertCommand{"B", 2, "harry"});
-  EXPECT_EQ(handler.handle(FullJoinCommand{}), "1,lean,\n2,,harry\nOK\n\n");
+  EXPECT_EQ(handler.handle(FullJoinCommand{}), "1,lean,\n2,,harry\nOK\n");
 }
 
 TEST_F(CommandHandlerTest, RightJoinKeepsAllOfB) {
   handler.handle(CreateTableCommand{"A"});
   handler.handle(CreateTableCommand{"B"});
   handler.handle(InsertCommand{"B", 1, "harry"});
-  EXPECT_EQ(handler.handle(RightJoinCommand{}), "1,,harry\nOK\n\n");
+  EXPECT_EQ(handler.handle(RightJoinCommand{}), "1,,harry\nOK\n");
 }
 
 TEST_F(CommandHandlerTest, PrintTableRequiresExistingTable) {
@@ -85,10 +95,10 @@ TEST_F(CommandHandlerTest, PrintTableListsRowsSortedById) {
   handler.handle(CreateTableCommand{"A"});
   handler.handle(InsertCommand{"A", 2, "sweater"});
   handler.handle(InsertCommand{"A", 1, "lean"});
-  EXPECT_EQ(handler.handle(PrintTableCommand{"A"}), "1,lean\n2,sweater\nOK\n\n");
+  EXPECT_EQ(handler.handle(PrintTableCommand{"A"}), "1,lean\n2,sweater\nOK\n");
 }
 
 TEST_F(CommandHandlerTest, PrintTableOnEmptyTable) {
   handler.handle(CreateTableCommand{"A"});
-  EXPECT_EQ(handler.handle(PrintTableCommand{"A"}), "OK\n\n");
+  EXPECT_EQ(handler.handle(PrintTableCommand{"A"}), "OK\n");
 }
