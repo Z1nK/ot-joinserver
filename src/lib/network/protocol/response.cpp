@@ -1,8 +1,8 @@
 #include "response.hpp"
 
-std::string formatOk() { return "OK\n\n"; }
+std::string formatOk() { return "OK\n"; }
 
-std::string formatError(std::string_view message) { return "ERR " + std::string(message) + "\n\n"; }
+std::string formatError(std::string_view message) { return "ERR " + std::string(message) + "\n"; }
 
 std::string formatRows(const std::vector<JoinedRecord>& rows) {
   std::string response;
@@ -14,7 +14,7 @@ std::string formatRows(const std::vector<JoinedRecord>& rows) {
     response += row.name_b.value_or("");
     response += '\n';
   }
-  response += "OK\n\n";
+  response += "OK\n";
   return response;
 }
 
@@ -26,6 +26,6 @@ std::string formatRows(const std::vector<Record>& rows) {
     response += row.name;
     response += '\n';
   }
-  response += "OK\n\n";
+  response += "OK\n";
   return response;
 }
