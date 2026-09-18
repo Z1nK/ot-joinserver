@@ -56,16 +56,17 @@ std::vector<JoinedRecord> fullJoin(const Table& left, const Table& right) {
 
 std::vector<JoinedRecord> symmetricDifference(const Table& left, const Table& right) {
   std::vector<JoinedRecord> result;
-  for (const auto& recordA : sortedRecords(left)) {
+  for (const auto& recordA : left.getAll()) {
     if (!right.get(recordA.id)) {
       result.push_back({recordA.id, recordA.name, std::nullopt});
     }
   }
-  for (const auto& recordB : sortedRecords(right)) {
+  for (const auto& recordB : right.getAll()) {
     if (!left.get(recordB.id)) {
       result.push_back({recordB.id, std::nullopt, recordB.name});
     }
   }
+  std::sort(result.begin(), result.end(), [](const JoinedRecord& a, const JoinedRecord& b) { return a.id < b.id; });
   return result;
 }
 
